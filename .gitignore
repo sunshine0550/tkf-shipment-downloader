@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+
+# PyInstaller
+build/
+dist/
+*.spec
+
+# pytest
+.pytest_cache/
+.coverage
+
+# 실제 allowlist (예시 파일만 커밋, 실제 값은 비공개)
+allowlist.json
+
+# 로그인 세션 프로필 (실수로 커밋 방지용 — 보통 홈 디렉터리에 생성됨)
+.tkf_dl_profile/
+
+# OS
+.DS_Store
+Thumbs.db
