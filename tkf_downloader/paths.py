@@ -66,3 +66,8 @@ def downloads_dir() -> str:
 def profile_dir() -> str:
     """로그인 세션(브라우저 프로필) 저장 위치. 모든 OS 에서 홈 아래 숨김 폴더."""
     return os.path.join(home(), ".tkf_dl_profile")
+
+
+def cookie_file() -> str:
+    """캡처한 로그인 세션 쿠키를 저장하는 파일."""
+    return os.path.join(home(), ".tkf_session")

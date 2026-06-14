@@ -54,3 +54,8 @@ def test_linux_falls_back_without_xdg_file(monkeypatch, tmp_path):
 def test_profile_dir_is_under_home(monkeypatch):
     _fake_home(monkeypatch, "/Users/tkf")
     assert paths.profile_dir() == os.path.join("/Users/tkf", ".tkf_dl_profile")
+
+
+def test_cookie_file_is_under_home(monkeypatch):
+    _fake_home(monkeypatch, "/Users/tkf")
+    assert paths.cookie_file() == os.path.join("/Users/tkf", ".tkf_session")

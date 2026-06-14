@@ -42,7 +42,7 @@ def _patch_allowlist(monkeypatch, payload):
     monkeypatch.setattr(
         access.urllib.request,
         "urlopen",
-        lambda req, timeout=10: _FakeResponse(payload),
+        lambda req, timeout=10, context=None: _FakeResponse(payload),
     )
 
 
@@ -65,7 +65,7 @@ def test_denied_when_allowed_key_missing(monkeypatch):
 
 
 def test_network_error_respects_fail_open_false(monkeypatch):
-    def boom(req, timeout=10):
+    def boom(req, timeout=10, context=None):
         raise OSError("network down")
 
     monkeypatch.setattr(access.urllib.request, "urlopen", boom)
@@ -74,7 +74,7 @@ def test_network_error_respects_fail_open_false(monkeypatch):
 
 
 def test_network_error_respects_fail_open_true(monkeypatch):
-    def boom(req, timeout=10):
+    def boom(req, timeout=10, context=None):
         raise OSError("network down")
 
     monkeypatch.setattr(access.urllib.request, "urlopen", boom)

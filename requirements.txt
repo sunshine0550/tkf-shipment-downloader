@@ -1,1 +1,2 @@
 playwright==1.48.0
+certifi>=2024.2.2

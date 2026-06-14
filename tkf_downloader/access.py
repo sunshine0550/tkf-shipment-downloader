@@ -3,7 +3,7 @@
 
 동작 방식:
   1) 실행되는 PC의 고유 ID(지문)를 계산한다.
-  2) 직접 호스팅하는 allowlist.json 을 가져온다.
+  2) 직접 호스팅하는 tkf-allowlist.json 을 가져온다.
   3) 그 안에 이 PC의 지문이 들어있을 때만 True 를 돌려준다.
 
 allowlist.json 은 어디든 "공개 GET 으로 읽히는 곳"에 올리면 된다:
@@ -20,15 +20,33 @@ allowlist.json 형식:
 
 import os
 import sys
+import ssl
 import json
 import hashlib
 import urllib.request
+
+
+def _ssl_context():
+    """certifi 인증서 묶음으로 SSL 컨텍스트 생성.
+
+    맥의 python.org 파이썬이나 PyInstaller exe 는 시스템 인증서를 못 봐서
+    HTTPS 검증이 실패하는 경우가 있다. certifi 를 쓰면 OS 와 무관하게 통과한다.
+    certifi 가 없으면 시스템 기본값으로 떨어진다.
+    """
+    try:
+        import certifi
+        return ssl.create_default_context(cafile=certifi.where())
+    except Exception:
+        return None
+
+
+_SSL_CTX = _ssl_context()
 
 # 환경변수 TKF_ALLOWLIST_URL 이 있으면 그것을 우선 사용한다.
 # TODO: 본인이 올린 allowlist.json 의 실제 주소로 교체하세요.
 ALLOWLIST_URL = os.environ.get(
     "TKF_ALLOWLIST_URL",
-    "https://raw.githubusercontent.com/<your-account>/<your-repo>/main/allowlist.json",
+    "https://gist.githubusercontent.com/sunshine0550/d2e3c15c79ecc921eb5d1de9109f75f0/raw/tkf-allowlist.json",
 )
 
 # 네트워크로 allowlist 를 못 읽었을 때 어떻게 할지.
@@ -70,7 +88,7 @@ def is_authorized() -> bool:
     fp = machine_fingerprint()
     try:
         req = urllib.request.Request(ALLOWLIST_URL, headers={"Cache-Control": "no-cache"})
-        with urllib.request.urlopen(req, timeout=10) as r:
+        with urllib.request.urlopen(req, timeout=10, context=_SSL_CTX) as r:
             data = json.load(r)
     except Exception:
         return FAIL_OPEN
