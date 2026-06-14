@@ -67,6 +67,7 @@ tkf-shipment-downloader/
 ├─ pytest.ini
 ├─ conftest.py
 ├─ .gitignore
+├─ LICENSE                # 독점 라이선스 (무단/상업적 사용 금지)
 └─ README.md
 ```
 
@@ -188,3 +189,13 @@ pyinstaller --onefile --windowed --name TKFDownloader --collect-all playwright -
 
 사용자는 exe 더블클릭 → 머신 ID 를 관리자에게 전달 → 관리자가 allowlist(Gist) 에 추가 →
 다시 실행하면 사용 가능.
+
+---
+
+## 라이선스
+
+**독점(Proprietary) 소프트웨어 — © 2026 박수현. All Rights Reserved.**
+자세한 내용은 [`LICENSE`](LICENSE) 참고.
+- 저작권자의 사전 서면 허가 없이 **사용·복제·수정·배포 금지** (무단 사용 금지)
+- **상업적 이용 금지** (판매·재라이선스·유료 서비스 등)
+- 허가받은 **사내 업무 용도로만** 사용
