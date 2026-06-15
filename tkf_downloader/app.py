@@ -166,7 +166,7 @@ class App:
     def __init__(self, root):
         self.root = root
         root.title(__app_name__)
-        root.geometry("720x520")
+        root.geometry("720x560")
 
         # 검색 기간 (기본: 어제 ~ 오늘)
         df, dt = default_range_display()
