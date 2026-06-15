@@ -91,7 +91,7 @@ playwright install chromium      # codegen/내장 브라우저용 (channel=chrom
 
 ## 2. API / 계정 설정
 
-`tkf_downloader/downloader.py` 상단 상수가 검색 API 호출에 쓰인다 (TKF ↔ Lam1730 기준):
+`tkf_downloader/api.py` 상단 상수가 검색 API 호출에 쓰인다 (TKF ↔ Lam1730 기준):
 
 - `SEARCH_URL` / `DETAIL_URL` — 두 API 주소
 - `SEARCH_PLANT_ID = "Lam1730,"` — 검색 payload 의 plant (다른 계정이면 변경)
@@ -102,7 +102,7 @@ playwright install chromium      # codegen/내장 브라우저용 (channel=chrom
 
 > 로그인 동작은 코드에 넣지 않는다 — 사용자가 브라우저에서 직접 로그인하고 그 세션 쿠키를
 > 재사용한다. (MS 로그인+MFA 자동화 금지)
-> 검색이 한 번에 가져오는 최대 건수는 `SEARCH_URL` 의 `PageSize`(기본 2000)로 정해진다.
+> 검색이 한 번에 가져오는 최대 건수는 `SEARCH_URL` 의 `PageSize`(현재 사실상 무제한)로 정해진다.
 
 ## 3. 접근 제어 설정 (allowlist)
 
@@ -174,8 +174,8 @@ pyinstaller --onefile --windowed --name TKFDownloader --collect-all playwright -
 ### 브라우저 의존성 처리 (둘 중 하나 선택)
 
 - **방법 A (권장, 가장 단순):** 사용자 PC에 **Google Chrome 가 깔려 있으면**
-  `downloader.py` 의 `channel="chrome"` 덕분에 별도 번들이 필요 없다. 그대로 배포.
-- **방법 B (Chrome 없는 PC 대비):** `downloader.py` 에서 `channel="chrome"` 줄을 지우고
+  `auth.py` 의 `channel="chrome"` 덕분에 별도 번들이 필요 없다. 그대로 배포.
+- **방법 B (Chrome 없는 PC 대비):** `auth.py` 에서 `channel="chrome"` 줄을 지우고
   Playwright 내장 Chromium 을 쓴다. 이 경우 사용자 PC에서 최초 1회
   `playwright install chromium` 이 필요하므로, 같이 줄 설치용 `setup.bat` 을 만들어 둔다:
   ```bat
@@ -189,6 +189,45 @@ pyinstaller --onefile --windowed --name TKFDownloader --collect-all playwright -
 
 사용자는 exe 더블클릭 → 머신 ID 를 관리자에게 전달 → 관리자가 allowlist(Gist) 에 추가 →
 다시 실행하면 사용 가능.
+
+---
+
+## 7. 유지보수 시 주의 — 깨지기 쉬운 부분
+
+> 이 앱은 **외부 사이트(myxcarrier.com)의 비공개 API 동작에 의존**한다. 사이트가 응답
+> 형식이나 스펙을 바꾸면 아래 지점들이 가장 먼저 깨진다. 문제가 생기면 여기부터 의심할 것.
+
+1. **사이트 API 스펙 (`api.py`)** — 가장 취약.
+   - URL: `SEARCH_URL` / `DETAIL_URL` 경로.
+   - 응답 키: `DELIVERY_NUM`, `SHIPPING_NUM`, `PLANT_ID`, `listShipmentDocumentUrls`,
+     `DOCUMENT_URL`. 이 중 하나라도 사이트에서 이름이 바뀌면 매칭/다운로드가 조용히 실패한다.
+
+2. **세션 만료 감지 (`api.py` 의 `_json()`)** — 이 사이트는 만료 시 401 을 안 주는 경우가
+   많아 **3중으로** 판정한다: ① HTTP 401/403, ② 응답이 JSON 이 아님(로그인 HTML 리다이렉트),
+   ③ `{"isRedirect": true}` 또는 `{"logoutUrl": ...}`. 사이트가 만료 응답 방식을 바꾸면
+   "세션 만료"를 못 잡거나 엉뚱하게 잡는다.
+
+3. **로그인 완료 판정 (`auth.py`)** — 검색 API 로는 로그인 여부를 알 수 없어
+   `window.sessionStorage.getItem('USERNAME')` 폴링 + `ASP.NET_SessionId` 쿠키 존재로
+   판정한다. SPA 가 이 키 이름이나 저장 방식을 바꾸면 "로그인 감지 실패(시간 초과)"가 난다.
+
+4. **계정/플랜트 고정값 (`api.py` 상단 상수)** — `SEARCH_PLANT_ID = "Lam1730,"`,
+   `SEARCH_STATUS_CODE = "SPD"`, `SEARCH_FEEDERSYSTEM = "All"` 은 특정 계정 기준 하드코딩.
+   다른 계정/플랜트로 쓰려면 여기만 바꾸면 된다.
+
+5. **Playwright + Chrome 채널 (`auth.py`)** — `channel="chrome"` 이라 사용자 PC에 실제
+   Google Chrome 설치가 필요하다. Chrome 없는 PC 대비는 6번의 "방법 B" 참고.
+
+6. **접근 제어 원격 의존 (`access.py`)** — `ALLOWLIST_URL` 이 살아있어야 한다. `FAIL_OPEN
+   = False` 라서 네트워크로 allowlist 를 못 읽으면 **전부 차단**된다(Gist 삭제/사설망 차단
+   주의). GUI 스레딩과 무관하게, 이 검사는 앱 시작 시 동기로 수행된다.
+
+7. **GUI 스레딩 규칙 (`app.py`)** — 위젯은 **메인 스레드에서만** 만지고, Worker 스레드 →
+   GUI 갱신은 반드시 `root.after(...)` 로 넘긴다. 새 기능 추가 시 워커에서 위젯을 직접
+   건드리면 크래시/멈춤이 난다.
+
+> 자주 오는 오해: **"다운로드가 안 돼요"** 의 대부분은 버그가 아니라 **검색 기간 밖의 ID**
+> (`⏭ 건너뜀`)다. 날짜 범위부터 확인하게 안내할 것.
 
 ---
 
