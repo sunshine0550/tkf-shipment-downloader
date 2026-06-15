@@ -125,7 +125,7 @@ class ApiClient:
                 pass
         return data if isinstance(data, list) else []
 
-    def fetch_document_urls(self, row: dict) -> dict:
+    def fetch_document_urls(self, row: dict) -> list:
         """상세 API → {설명: DOCUMENT_URL}. row 는 search_shipments() 결과 한 항목."""
         params = urlencode({
             "deliveryno": str(row.get("DELIVERY_NUM", "")),
@@ -133,11 +133,11 @@ class ApiClient:
             "PlantID": str(row.get("PLANT_ID", "")),
         })
         data = self._json(DETAIL_URL + "?" + params)
-        captured: dict[str, str] = {}
+        captured: list[tuple[str, str]] = []
         for d in (data.get("listShipmentDocumentUrls") or []):
             url = d.get("DOCUMENT_URL")
             if url:
-                captured[d.get("DESCRIPTION") or url] = url
+                captured.append((d.get("DESCRIPTION") or url, url))
         return captured
 
     def download_row(self, row: dict, out_root: str):
@@ -151,11 +151,14 @@ class ApiClient:
         os.makedirs(folder, exist_ok=True)
 
         saved, failed, seen = [], [], set()
-        for desc, url in urls.items():
+        for desc, url in urls:
             clean = url.split("?")[0]
             fname = _safe(os.path.basename(clean)) or (_safe(desc) + ".bin")
-            if fname in seen:
-                fname = _safe(desc) + "_" + fname
+            base, ext = os.path.splitext(fname)
+            i = 1
+            while fname in seen:
+                fname = f"{base}_{i}{ext}"
+                i += 1
             seen.add(fname)
             try:
                 with self._open(url) as r:
