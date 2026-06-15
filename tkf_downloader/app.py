@@ -166,12 +166,7 @@ class App:
     def __init__(self, root):
         self.root = root
         root.title(__app_name__)
-        root.geometry("560x520")
-
-        tk.Label(root, text="Shipment ID (한 줄에 하나씩)").pack(anchor="w", padx=10, pady=(10, 0))
-        self.ids = scrolledtext.ScrolledText(root, height=6)
-        self.ids.pack(fill="x", padx=10)
-        _enable_ctrl_clipboard(self.ids)
+        root.geometry("720x520")
 
         # 검색 기간 (기본: 어제 ~ 오늘)
         df, dt = default_range_display()
@@ -188,6 +183,11 @@ class App:
         self.to_date.pack(side="left", padx=4)
         _enable_ctrl_clipboard(self.to_date)
         tk.Label(date_row, text="(MM/DD/YYYY)").pack(side="left", padx=4)
+
+        tk.Label(root, text="Shipment ID (한 줄에 하나씩)").pack(anchor="w", padx=10, pady=(10, 0))
+        self.ids = scrolledtext.ScrolledText(root, height=6)
+        self.ids.pack(fill="x", padx=10)
+        _enable_ctrl_clipboard(self.ids)
 
         btns = tk.Frame(root)
         btns.pack(fill="x", padx=10, pady=8)
