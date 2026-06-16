@@ -104,7 +104,8 @@ def test_fetch_document_urls(monkeypatch):
     _patch_urlopen(monkeypatch, {"GetShipmentHistoryInfo": _Resp(json.dumps(detail))})
     urls = _client().fetch_document_urls(
         {"DELIVERY_NUM": "A1", "SHIPPING_NUM": 3013834, "PLANT_ID": "Lam1730"})
-    assert urls == {"라벨": "https://x/LABEL.jpg"}
+    # fetch_document_urls 는 (설명, url) 튜플 리스트를 반환한다 (URL 없는 항목은 제외).
+    assert urls == [("라벨", "https://x/LABEL.jpg")]
 
 
 # ---------------------------------------------------------------- download_row
@@ -140,4 +141,5 @@ def test_download_row_dedupes_same_basename(tmp_path, monkeypatch):
     _patch_urlopen(monkeypatch, routes)
 
     _, saved, _ = _client().download_row({"DELIVERY_NUM": "SHIP-2"}, str(tmp_path))
-    assert sorted(p.split("/")[-1] for p in saved) == ["Second_doc.pdf", "doc.pdf"]
+    # 같은 파일명(doc.pdf)이 겹치면 뒤엣것에 _1 을 붙여 구분한다.
+    assert sorted(p.split("/")[-1] for p in saved) == ["doc.pdf", "doc_1.pdf"]
