@@ -16,6 +16,7 @@ import os
 import re
 import ssl
 import json
+import time
 import urllib.error
 import urllib.request
 from urllib.parse import urlencode
@@ -160,18 +161,37 @@ class ApiClient:
                 fname = f"{base}_{i}{ext}"
                 i += 1
             seen.add(fname)
+            dest = os.path.join(folder, fname)
+            reason = self._download_with_retry(url, dest)
+            if reason is None:
+                saved.append(dest)
+                self.log(f"  - 저장: {fname}")
+            else:
+                self.log(f"  - 실패: {fname} ({reason})")
+                failed.append((desc, reason))
+
+        return folder, saved, failed
+
+    # 일시적 오류(네트워크 끊김/타임아웃/5xx)는 최대 2회까지 자동 재시도한다.
+    # 401/403/404 처럼 재시도해도 안 풀리는 오류는 즉시 실패 처리한다.
+    _MAX_RETRY = 2
+    def _download_with_retry(self, url: str, dest: str):
+        """url 을 dest 파일로 저장. 성공이면 None, 실패면 사유 문자열을 반환."""
+        reason = "알 수 없는 오류"
+        for attempt in range(self._MAX_RETRY + 1):   # 처음 1번 + 재시도 2번 = 최대 3번
             try:
                 with self._open(url) as r:
                     raw = r.read()
-                with open(os.path.join(folder, fname), "wb") as f:
+                with open(dest, "wb") as f:
                     f.write(raw)
-                saved.append(os.path.join(folder, fname))
-                self.log(f"  - 저장: {fname}")
+                return None                            # 성공
             except urllib.error.HTTPError as e:
-                self.log(f"  - 실패(HTTP {e.code}): {desc}")
-                failed.append((desc, f"HTTP {e.code}"))
+                if e.code in (401, 403, 404):          # 재시도해도 안 풀림 → 즉시 포기
+                    return f"HTTP {e.code}"
+                reason = f"HTTP {e.code}"               # 5xx 등은 재시도 대상
             except Exception as e:
-                self.log(f"  - 오류({desc}): {e}")
-                failed.append((desc, str(e)))
-
-        return folder, saved, failed
+                reason = str(e)                         # 네트워크 끊김/타임아웃 등
+            if attempt < self._MAX_RETRY:
+                self.log(f"  - 재시도 {attempt + 1}/{self._MAX_RETRY} ... ({reason})")
+                time.sleep(1.5)
+        return reason
