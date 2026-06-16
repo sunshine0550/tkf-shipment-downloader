@@ -159,7 +159,85 @@ pytest
 ## 6. 윈도우 비개발자용 배포 (exe 만들기)
 
 > ⚠️ **윈도우용 exe 는 반드시 "윈도우 PC"에서 빌드해야 한다.** 맥에서 만든 건 맥 전용.
-> (윈도우 없이 빌드하려면 GitHub Actions 자동 빌드를 쓸 수 있다.)
+
+방법은 두 가지다. **맥만 있으면(=윈도우 PC가 없으면) → 6-A(GitHub Actions)** 를 쓰면 된다.
+GitHub 가 클라우드의 윈도우 컴퓨터를 빌려줘서 거기서 exe 를 만들어 준다.
+
+| 방법 | 윈도우 PC | 추천 상황 |
+|------|-----------|-----------|
+| **6-A. GitHub Actions (자동, 클라우드)** | 필요 없음 | **맥 사용자 / 매번 자동 빌드** ← 추천 |
+| 6-B. 로컬 PyInstaller (수동) | 필요함 | 손에 윈도우 PC가 있을 때 |
+
+---
+
+### 6-A. GitHub Actions 로 자동 빌드 (윈도우 PC 없이) — **추천**
+
+> 처음 해봐도 그대로 따라하면 된다. 저장소에 이미 빌드 설정 파일
+> (`.github/workflows/build-windows.yml`)이 들어 있다. GitHub 가 이 파일을 보고
+> "클라우드 윈도우"에서 exe 를 만들어 준다.
+
+#### 한 번만 하면 되는 준비 (이미 했다면 건너뜀)
+
+1. 이 프로젝트가 GitHub 저장소에 올라가 있어야 한다(이미 `origin` 이 연결돼 있음).
+   설정 파일을 포함해 푸시한다:
+   ```bash
+   git add .github/workflows/build-windows.yml
+   git commit -m "ci: 윈도우 exe 자동 빌드 추가"
+   git push
+   ```
+2. 브라우저에서 저장소를 연다: `https://github.com/sunshine0550/tkf-shipment-downloader`
+3. 상단 탭에서 **Actions** 를 클릭한다.
+   - "Workflows aren't being run on this repository" 같은 안내가 뜨면
+     **I understand my workflows, go ahead and enable them** 버튼을 눌러 활성화한다.
+
+#### 방법 ① 버튼으로 즉시 빌드하기 (가장 쉬움)
+
+1. 저장소 → **Actions** 탭.
+2. 왼쪽 목록에서 **Build Windows EXE** 클릭.
+3. 오른쪽의 **Run workflow** 버튼 클릭 → (브랜치는 `develop` 또는 `main` 그대로) →
+   초록색 **Run workflow** 한 번 더 클릭.
+4. 잠깐 뒤 목록에 노란 점(●) → 초록 체크(✓)로 바뀌면 완료다(보통 **3~6분**).
+   실행 줄을 클릭해서 들어간다.
+5. 페이지 맨 아래 **Artifacts** 칸에 **TKFDownloader-windows** 가 있다. 클릭하면
+   `TKFDownloader-windows.zip` 이 다운로드된다.
+6. zip 을 풀면 **`TKFDownloader.exe`** 가 들어 있다. 이게 윈도우 사용자에게 줄 파일이다.
+
+> 💡 빨간 X(실패)가 뜨면, 그 실행을 눌러 빨간색 단계를 펼치면 에러 메시지가 보인다.
+> 보통 `requirements.txt` 나 설정 파일 오타다.
+
+#### 방법 ② 버전 태그로 빌드 + 자동 Release (배포용)
+
+`v` 로 시작하는 **태그**를 push 하면, 빌드 후 **Releases** 에 exe 가 자동 첨부된다.
+사용자에게 "여기서 받으세요" 하고 링크 하나만 주면 되므로 배포에 깔끔하다.
+
+```bash
+git tag v0.1.0      # 버전은 tkf_downloader/__init__.py 의 __version__ 과 맞추면 좋다
+git push origin v0.1.0
+```
+
+- 빌드가 끝나면 저장소 우측 **Releases** (또는
+  `https://github.com/sunshine0550/tkf-shipment-downloader/releases`)에 `v0.1.0` 릴리스가
+  생기고, 그 아래 **Assets** 에 `TKFDownloader.exe` 가 붙어 있다.
+- 다음 버전은 `v0.1.1`, `v0.2.0` 처럼 **올려가며** 태그를 새로 push 하면 된다
+  (같은 태그를 두 번 쓰면 안 됨).
+
+> ℹ️ 태그 방식의 Release 생성은 별도 설정 없이 동작한다(워크플로우에 권한이 포함돼 있음).
+> 혹시 권한 오류가 나면: 저장소 **Settings → Actions → General →
+> Workflow permissions → "Read and write permissions"** 를 켜면 된다.
+
+#### 빌드 설정 파일은 무엇을 하나 (참고)
+
+`.github/workflows/build-windows.yml` 의 핵심 순서:
+1. 클라우드 **윈도우** 머신을 띄운다 (`runs-on: windows-latest`).
+2. 파이썬 3.12 설치 → `requirements.txt` + `pyinstaller` 설치.
+3. `pyinstaller --onefile --windowed ... run.py` 로 exe 빌드(아래 6-B 와 같은 명령).
+4. exe 를 **아티팩트**로 업로드(방법 ①) + 태그면 **Release** 에 첨부(방법 ②).
+
+수정하고 싶으면(파이썬 버전, 이름 등) 그 파일만 고쳐서 push 하면 다음 빌드부터 반영된다.
+
+---
+
+### 6-B. 로컬에서 직접 빌드 (윈도우 PC 가 있을 때)
 
 ```bat
 pip install -r requirements.txt
