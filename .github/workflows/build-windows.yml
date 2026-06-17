@@ -49,6 +49,7 @@ jobs:
           pyinstaller --onefile --windowed --name TKFDownloader
           --collect-all playwright
           --collect-all certifi
+          --icon assets/sunshine.ico
           run.py
 
       # 5. 빌드된 exe 를 아티팩트로 업로드 (Actions 실행 페이지에서 zip 으로 다운로드)
