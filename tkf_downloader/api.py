@@ -59,6 +59,22 @@ def _safe(name: str) -> str:
     """파일/폴더 이름으로 못 쓰는 문자를 제거."""
     return re.sub(r'[\\/:*?"<>|]+', "_", str(name)).strip() or "file"
 
+def _split_urls(raw: str) -> list:
+    """하나로 붙어버린 여러 URL 을 각각으로 분리.
+
+      서버가 DOCUMENT_URL 에 여러 파일을 'https://' 구분 없이 이어 붙여 주는
+      경우가 있다. 예:
+        'https://.../382126183982.PNGhttps://.../382126183982-1.PNG'
+          → ['https://.../382126183982.PNG',
+             'https://.../382126183982-1.PNG']
+      URL 이 하나뿐이면 그대로 [url] 한 개를 반환한다.
+      """
+    if not raw:
+        return []
+    # 'http://' 또는 'https://' 가 시작되는 지점마다 자른다(그 글자는 남김)
+    parts = re.split(r'(?=https?://)', raw)
+    return [p for p in (s.strip() for s in parts) if p]
+
 
 class ApiClient:
     """로그인 쿠키 문자열 하나로 동작하는 HTTP 클라이언트."""
@@ -136,9 +152,12 @@ class ApiClient:
         data = self._json(DETAIL_URL + "?" + params)
         captured: list[tuple[str, str]] = []
         for d in (data.get("listShipmentDocumentUrls") or []):
-            url = d.get("DOCUMENT_URL")
-            if url:
-                captured.append((d.get("DESCRIPTION") or url, url))
+            raw_url = d.get("DOCUMENT_URL")
+            if not raw_url:
+                continue
+            desc = d.get("DESCRIPTION")
+            for url in _split_urls(raw_url):
+                captured.append((desc or url, url))
         return captured
 
     def download_row(self, row: dict, out_root: str):
