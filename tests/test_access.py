@@ -80,3 +80,34 @@ def test_network_error_respects_fail_open_true(monkeypatch):
     monkeypatch.setattr(access.urllib.request, "urlopen", boom)
     monkeypatch.setattr(access, "FAIL_OPEN", True)
     assert access.is_authorized() is True
+
+
+def test_check_access_reports_ssl_error_cause(monkeypatch):
+    import ssl
+    import urllib.error
+
+    def boom(req, timeout=10, context=None):
+        raise urllib.error.URLError(ssl.SSLCertVerificationError("certificate verify failed"))
+
+    monkeypatch.setattr(access.urllib.request, "urlopen", boom)
+    status, detail = access.check_access()
+    assert status == access.ERROR
+    assert "SSL 인증서 검증 실패" in detail
+
+
+def test_check_access_reports_non_json_response(monkeypatch):
+    class _Html(_FakeResponse):
+        def __init__(self):
+            self._buf = io.BytesIO(b"<html>proxy login</html>")
+
+    monkeypatch.setattr(access.urllib.request, "urlopen",
+                        lambda req, timeout=10, context=None: _Html())
+    status, detail = access.check_access()
+    assert status == access.ERROR
+    assert "형식이 아님" in detail
+
+
+def test_check_access_denied_is_not_error(monkeypatch):
+    monkeypatch.setattr(access, "machine_fingerprint", lambda: "abc123")
+    _patch_allowlist(monkeypatch, {"allowed": ["other"]})
+    assert access.check_access() == (access.DENIED, "")
