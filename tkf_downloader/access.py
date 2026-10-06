@@ -35,7 +35,10 @@ ALLOWLIST_URL = os.environ.get(
 
 # 네트워크로 allowlist 를 못 읽었을 때 어떻게 할지.
 #   False = 못 읽으면 차단(더 안전)  /  True = 못 읽으면 허용(오프라인 허용)
-FAIL_OPEN = False
+# True 인 이유: 일부 회사망은 브라우저 외 프로그램의 GitHub(Gist) 접속을 차단한다
+#   (연결 끊김, WinError 10054). 그런 PC도 쓸 수 있게 하되, 명단을 읽었는데
+#   ID 가 없는 경우는 여전히 차단한다.
+FAIL_OPEN = True
 
 
 def get_machine_id() -> str:
