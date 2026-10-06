@@ -39,30 +39,44 @@ jobs:
           pip install -r requirements.txt
           pip install pyinstaller
 
-      # 4. exe 빌드
+      # 4. exe 파일 이름 정하기
+      #    태그 빌드   : TKFDownloader-v1.0.1.exe  (태그 이름 그대로)
+      #    수동 빌드   : TKFDownloader-stage-1a2b3c4.exe  (브랜치 + 커밋 앞 7자리)
+      - name: EXE 이름 정하기
+        shell: bash
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            echo "EXE_NAME=TKFDownloader-${GITHUB_REF_NAME}" >> "$GITHUB_ENV"
+          else
+            echo "EXE_NAME=TKFDownloader-${GITHUB_REF_NAME//\//-}-${GITHUB_SHA::7}" >> "$GITHUB_ENV"
+          fi
+
+      # 5. exe 빌드
       #    --onefile   : 단일 exe 로 묶음
       #    --windowed  : 실행 시 검은 콘솔창이 안 뜨게(GUI 앱)
       #    --collect-all playwright : 브라우저 구동 드라이버까지 포함
       #    --collect-all certifi    : HTTPS 인증서 묶음 포함(allowlist https 읽기용)
+      #    --hidden-import truststore : 윈도우 인증서 저장소 사용(회사 SSL 검사 환경 대응)
       - name: EXE 빌드 (PyInstaller)
         run: >
-          pyinstaller --onefile --windowed --name TKFDownloader
+          pyinstaller --onefile --windowed --name ${{ env.EXE_NAME }}
           --collect-all playwright
           --collect-all certifi
+          --hidden-import truststore
           --icon assets/sunshine.ico
           run.py
 
-      # 5. 빌드된 exe 를 아티팩트로 업로드 (Actions 실행 페이지에서 zip 으로 다운로드)
+      # 6. 빌드된 exe 를 아티팩트로 업로드 (Actions 실행 페이지에서 zip 으로 다운로드)
       - name: EXE 업로드 (아티팩트)
         uses: actions/upload-artifact@v4
         with:
-          name: TKFDownloader-windows
-          path: dist/TKFDownloader.exe
+          name: ${{ env.EXE_NAME }}
+          path: dist/${{ env.EXE_NAME }}.exe
           if-no-files-found: error
 
-      # 6. (태그 push 일 때만) GitHub Release 를 만들고 exe 를 첨부
+      # 7. (태그 push 일 때만) GitHub Release 를 만들고 exe 를 첨부
       - name: Release 생성 + EXE 첨부
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/TKFDownloader.exe
+          files: dist/${{ env.EXE_NAME }}.exe

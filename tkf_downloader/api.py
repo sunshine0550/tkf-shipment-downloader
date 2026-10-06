@@ -14,12 +14,13 @@
 
 import os
 import re
-import ssl
 import json
 import time
 import urllib.error
 import urllib.request
 from urllib.parse import urlencode
+
+from .net import SSL_CTX, describe_error
 
 BASE = "https://lamresearch.myxcarrier.com"
 APP_URL = BASE + "/xCarrier/Home/Index"
@@ -43,21 +44,15 @@ class AuthExpired(ApiError):
     """세션 쿠키가 만료/무효 → 재로그인이 필요함."""
 
 
-def _ssl_context():
-    """certifi 인증서로 HTTPS 검증 (맥/윈도우/exe 어디서나 통과)."""
-    try:
-        import certifi
-        return ssl.create_default_context(cafile=certifi.where())
-    except Exception:
-        return None
-
-
-_SSL_CTX = _ssl_context()
-
-
 def _safe(name: str) -> str:
     """파일/폴더 이름으로 못 쓰는 문자를 제거."""
     return re.sub(r'[\\/:*?"<>|]+', "_", str(name)).strip() or "file"
+
+def _ext_folder(fname: str) -> str:
+    """파일명의 확장자로 하위 폴더 이름을 정한다. 'a.PDF' → 'pdf', 확장자 없음 → 'etc'."""
+    ext = os.path.splitext(fname)[1].lstrip(".").lower()
+    return _safe(ext) if ext else "etc"
+
 
 def _split_urls(raw: str) -> list:
     """하나로 붙어버린 여러 URL 을 각각으로 분리.
@@ -96,7 +91,7 @@ class ApiClient:
             headers["Content-Type"] = content_type
         data = body.encode("utf-8") if isinstance(body, str) else body
         req = urllib.request.Request(url, data=data, headers=headers, method=method)
-        return urllib.request.urlopen(req, timeout=60, context=_SSL_CTX)
+        return urllib.request.urlopen(req, timeout=60, context=SSL_CTX)
 
     def _json(self, url, method="GET", body=None, content_type=None):
         try:
@@ -108,7 +103,7 @@ class ApiClient:
                 raise AuthExpired("인증 거부 (로그인 만료)")
             raise ApiError(f"HTTP {e.code}")
         except urllib.error.URLError as e:
-            raise ApiError(f"네트워크 오류: {e.reason}")
+            raise ApiError(describe_error(e))
         if "application/json" not in ctype.lower():
             # 로그인 만료 시 보통 로그인 HTML 로 리다이렉트된다
             raise AuthExpired("응답이 JSON 이 아님 (로그인 만료로 추정)")
@@ -161,7 +156,10 @@ class ApiClient:
         return captured
 
     def download_row(self, row: dict, out_root: str):
-        """한 shipment(row)의 모든 문서를 out_root/<DELIVERY_NUM>/ 에 저장.
+        """한 shipment(row)의 모든 문서를 out_root/<DELIVERY_NUM>/<확장자>/ 에 저장.
+
+        예) X100000014374632/pdf/a.pdf, X100000014374632/jpg/b.jpg
+            확장자가 없는 파일은 X100000014374632/etc/ 에 저장한다.
 
         반환: (폴더경로, 저장된 파일경로 리스트, 실패목록[(설명, 사유)])
         """
@@ -180,11 +178,13 @@ class ApiClient:
                 fname = f"{base}_{i}{ext}"
                 i += 1
             seen.add(fname)
-            dest = os.path.join(folder, fname)
+            sub = _ext_folder(fname)
+            os.makedirs(os.path.join(folder, sub), exist_ok=True)
+            dest = os.path.join(folder, sub, fname)
             reason = self._download_with_retry(url, dest)
             if reason is None:
                 saved.append(dest)
-                self.log(f"  - 저장: {fname}")
+                self.log(f"  - 저장: {sub}/{fname}")
             else:
                 self.log(f"  - 실패: {fname} ({reason})")
                 failed.append((desc, reason))

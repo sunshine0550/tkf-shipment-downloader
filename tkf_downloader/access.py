@@ -20,27 +20,11 @@ allowlist.json 형식:
 
 import os
 import sys
-import ssl
 import json
 import hashlib
 import urllib.request
 
-
-def _ssl_context():
-    """certifi 인증서 묶음으로 SSL 컨텍스트 생성.
-
-    맥의 python.org 파이썬이나 PyInstaller exe 는 시스템 인증서를 못 봐서
-    HTTPS 검증이 실패하는 경우가 있다. certifi 를 쓰면 OS 와 무관하게 통과한다.
-    certifi 가 없으면 시스템 기본값으로 떨어진다.
-    """
-    try:
-        import certifi
-        return ssl.create_default_context(cafile=certifi.where())
-    except Exception:
-        return None
-
-
-_SSL_CTX = _ssl_context()
+from .net import SSL_CTX, SSL_SOURCE, describe_error
 
 # 환경변수 TKF_ALLOWLIST_URL 이 있으면 그것을 우선 사용한다.
 # TODO: 본인이 올린 allowlist.json 의 실제 주소로 교체하세요.
@@ -51,7 +35,10 @@ ALLOWLIST_URL = os.environ.get(
 
 # 네트워크로 allowlist 를 못 읽었을 때 어떻게 할지.
 #   False = 못 읽으면 차단(더 안전)  /  True = 못 읽으면 허용(오프라인 허용)
-FAIL_OPEN = False
+# True 인 이유: 일부 회사망은 브라우저 외 프로그램의 GitHub(Gist) 접속을 차단한다
+#   (연결 끊김, WinError 10054). 그런 PC도 쓸 수 있게 하되, 명단을 읽었는데
+#   ID 가 없는 경우는 여전히 차단한다.
+FAIL_OPEN = True
 
 
 def get_machine_id() -> str:
@@ -84,18 +71,45 @@ def machine_fingerprint() -> str:
     return hashlib.sha256(get_machine_id().encode("utf-8")).hexdigest()[:16]
 
 
-def is_authorized() -> bool:
+# check_access() 결과 상태
+OK = "ok"            # 명단에 있음 → 사용 가능
+DENIED = "denied"    # 명단은 읽었는데 이 PC가 없음
+ERROR = "error"      # 명단 자체를 못 읽음 (네트워크/SSL/형식 문제)
+
+
+def check_access():
+    """(상태, 상세) 반환. 상태는 OK / DENIED / ERROR.
+
+    ERROR 일 때 상세에는 실제 원인(SSL 검증 실패, 시간 초과 등)이 들어간다.
+    """
     fp = machine_fingerprint()
     try:
         req = urllib.request.Request(ALLOWLIST_URL, headers={"Cache-Control": "no-cache"})
-        with urllib.request.urlopen(req, timeout=10, context=_SSL_CTX) as r:
-            data = json.load(r)
+        with urllib.request.urlopen(req, timeout=10, context=SSL_CTX) as r:
+            raw = r.read()
+    except Exception as e:
+        return ERROR, f"{describe_error(e)}\n[인증서: {SSL_SOURCE}]"
+    try:
+        data = json.loads(raw)
+        allowed = data.get("allowed", [])
     except Exception:
+        # 프록시 로그인/차단 페이지(HTML)가 대신 돌아온 경우 등
+        head = raw[:80].decode("utf-8", "replace").replace("\n", " ")
+        return ERROR, f"승인 명단 형식이 아님 (프록시/차단 페이지 가능성)\n[응답 앞부분: {head}]"
+    return (OK, "") if fp in allowed else (DENIED, "")
+
+
+def is_authorized() -> bool:
+    status, _ = check_access()
+    if status == ERROR:
         return FAIL_OPEN
-    return fp in data.get("allowed", [])
+    return status == OK
 
 
 if __name__ == "__main__":
     # 사용자가 이 파일만 실행해서 자기 지문을 확인할 수 있게.
     print("이 PC의 머신 ID:", machine_fingerprint())
-    print("승인 여부:", "허용됨" if is_authorized() else "거부됨")
+    status, detail = check_access()
+    print("승인 여부:", {OK: "허용됨", DENIED: "거부됨 (명단에 없음)", ERROR: "확인 불가"}[status])
+    if detail:
+        print(detail)

@@ -2,7 +2,7 @@
 메인 앱 (GUI)
 
 실행하면:
-  1) 접근 권한 검사 → 승인 안 된 PC면 머신 ID 를 보여주고 종료.
+  1) 접근 권한 검사 → 승인 안 된 PC면 머신 ID 를, 명단을 못 읽으면 실제 원인을 보여주고 종료.
   2) 작은 창이 뜸. "브라우저 열기"를 눌러 로그인 → Shipment ID 붙여넣고 "다운로드".
 
 ** 동작 방식 **
@@ -17,7 +17,7 @@ import tkinter as tk
 from tkinter import scrolledtext, messagebox
 
 from . import __app_name__
-from .access import is_authorized, machine_fingerprint
+from .access import DENIED, ERROR, FAIL_OPEN, check_access, machine_fingerprint
 from .api import ApiClient, AuthExpired
 from .auth import capture_cookie_via_browser, load_cookie_header
 from .paths import downloads_dir
@@ -225,19 +225,34 @@ class App:
 
 
 def main():
-    if not is_authorized():
+    status, detail = check_access()
+    if status == DENIED or (status == ERROR and not FAIL_OPEN):
         root = tk.Tk()
         root.withdraw()
-        messagebox.showerror(
-            "접근 거부",
-            "이 PC는 사용 승인이 되어 있지 않습니다.\n\n"
-            "아래 머신 ID를 관리자에게 보내 승인을 받으세요:\n\n"
-            f"{machine_fingerprint()}",
-        )
+        if status == DENIED:
+            messagebox.showerror(
+                "접근 거부",
+                "이 PC는 사용 승인이 되어 있지 않습니다.\n\n"
+                "아래 머신 ID를 관리자에게 보내 승인을 받으세요:\n\n"
+                f"{machine_fingerprint()}",
+            )
+        else:
+            messagebox.showerror(
+                "승인 확인 실패",
+                "승인 명단을 불러오지 못해 실행할 수 없습니다.\n"
+                "(이 PC의 승인 여부와는 무관한 네트워크/보안 문제입니다)\n\n"
+                f"원인: {detail}\n\n"
+                "이 창의 내용을 그대로 관리자에게 보내주세요.\n"
+                f"머신 ID: {machine_fingerprint()}",
+            )
         return
 
     root = tk.Tk()
-    App(root)
+    app = App(root)
+    if status == ERROR:
+        # FAIL_OPEN 으로 통과한 경우: 실행은 허용하되 로그에 사유를 남긴다
+        app.log_threadsafe("[안내] 승인 명단을 불러오지 못해 확인 없이 실행합니다.")
+        app.log_threadsafe(f"       원인: {detail.splitlines()[0]}")
     root.mainloop()
 
 
