@@ -248,7 +248,11 @@ def main():
         return
 
     root = tk.Tk()
-    App(root)
+    app = App(root)
+    if status == ERROR:
+        # FAIL_OPEN 으로 통과한 경우: 실행은 허용하되 로그에 사유를 남긴다
+        app.log_threadsafe("[안내] 승인 명단을 불러오지 못해 확인 없이 실행합니다.")
+        app.log_threadsafe(f"       원인: {detail.splitlines()[0]}")
     root.mainloop()
 
 

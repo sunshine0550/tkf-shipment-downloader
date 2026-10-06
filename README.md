@@ -121,9 +121,9 @@ exe 는 실행할 때마다 그걸 읽어 확인한다 → **사람을 추가/�
 
 > allowlist 값은 원본 ID 가 아니라 **해시된 짧은 지문**이라 공개돼도 안전하다.
 > 머신 ID만 따로 확인하려면: `python -m tkf_downloader.access`
-> HTTPS 인증서 검증은 `certifi` 로 처리하므로 맥/윈도우/exe 어디서나 동작한다.
-> 로컬 개발 중 접근 제어를 잠깐 끄려면 `access.py` 의 `FAIL_OPEN = True`
-> (네트워크 안 되면 통과). **배포 전 반드시 `False` 로 되돌릴 것.**
+> HTTPS 인증서 검증은 OS 인증서 저장소(`truststore`)를 먼저 쓰고, 안 되면 `certifi` 로 처리한다(`net.py`).
+> 현재 `access.py` 의 `FAIL_OPEN = True` — 명단을 **못 읽으면 통과**, 읽었는데 ID 가 없으면 차단.
+> (회사망이 GitHub 를 막는 PC 대응. 엄격하게 하려면 `False`)
 
 ## 4. 로컬 실행
 
@@ -298,9 +298,10 @@ pyinstaller --onefile --windowed --name TKFDownloader --collect-all playwright -
    Google Chrome 설치가 필요하다. Chrome 없는 PC 대비는 6번의 "방법 B" 참고.
 
 6. **접근 제어 원격 의존 (`access.py`)** — `ALLOWLIST_URL` 이 살아있어야 한다. `FAIL_OPEN
-   = False` 라서 네트워크로 allowlist 를 못 읽으면 **전부 차단**된다(Gist 삭제/사설망 차단
-   주의). 이때 에러창은 "접근 거부"(명단에 없음)가 아니라 "승인 확인 실패"와 실제 원인
-   (SSL/시간초과/형식 등)을 보여준다. GUI 스레딩과 무관하게, 이 검사는 앱 시작 시 동기로 수행된다.
+   = True` 라서 네트워크로 allowlist 를 **못 읽으면 통과**시키고(진행 로그에 사유 표시),
+   **읽었는데 ID 가 없으면 차단**한다. 일부 회사망이 브라우저 외 프로그램의 GitHub 접속을
+   끊기 때문(WinError 10054). `False` 로 바꾸면 못 읽을 때 "승인 확인 실패" 창과 실제 원인
+   (SSL/시간초과/연결 끊김 등)을 보여주고 종료한다. GUI 스레딩과 무관하게, 이 검사는 앱 시작 시 동기로 수행된다.
 
 7. **GUI 스레딩 규칙 (`app.py`)** — 위젯은 **메인 스레드에서만** 만지고, Worker 스레드 →
    GUI 갱신은 반드시 `root.after(...)` 로 넘긴다. 새 기능 추가 시 워커에서 위젯을 직접
