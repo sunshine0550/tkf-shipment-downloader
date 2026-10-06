@@ -1,7 +1,7 @@
 # TKF Shipment Downloader
 
 Shipment ID 를 여러 개 입력하면, 지정한 **검색 기간** 안의 건들을 찾아
-각 건의 문서를 `다운로드/<shipment id>/` 폴더에 자동 저장하는 도구 (TKF 사내용).
+각 건의 문서를 `다운로드/<shipment id>/<확장자>/` 폴더(예: `.../pdf/`, `.../jpg/`)에 자동 저장하는 도구 (TKF 사내용).
 
 동작 원리 (순수 API 방식 — 크롤링/클릭 없음):
 1. **로그인이 필요할 때만** 브라우저가 떠서 로그인(MS+MFA)하고, 세션 쿠키
@@ -29,7 +29,7 @@ Shipment ID 를 여러 개 입력하면, 지정한 **검색 기간** 안의 건�
 **맥과 윈도우 모두에서 동일하게 동작한다.** (리눅스도 지원)
 
 - 다운로드한 파일은 각 OS 의 **실제 '다운로드' 폴더** 아래
-  `다운로드/<shipment id>/` 에 저장된다 (`tkf_downloader/paths.py` 가 해석):
+  `다운로드/<shipment id>/<확장자>/` 에 저장된다 (확장자 없는 파일은 `etc/`) (`tkf_downloader/paths.py` 가 해석):
   - **윈도우**: 레지스트리에서 실제 Downloads 경로를 읽음(사용자가 폴더를 옮겼어도 정확).
     못 읽으면 `%USERPROFILE%\Downloads` 로 떨어짐.
   - **맥**: `~/Downloads`
@@ -52,7 +52,8 @@ tkf-shipment-downloader/
 │  ├─ app.py             # GUI + 작업 흐름 (tkinter). 로직 시작점 main()
 │  ├─ api.py             # 순수 HTTP API 클라이언트 (검색/상세/다운로드, 브라우저 없음)
 │  ├─ auth.py            # 세션 쿠키 캐시 + 로그인 시에만 브라우저 캡처
-│  ├─ access.py          # 접근 제어(머신 ID ↔ allowlist, certifi 로 HTTPS 검증)
+│  ├─ access.py          # 접근 제어(머신 ID ↔ allowlist, 실패 원인 구분)
+│  ├─ net.py             # HTTPS 공용 설정(truststore → certifi), 네트워크 오류 설명
 │  ├─ paths.py           # OS별 다운로드 폴더/프로필/쿠키 경로 해석
 │  └─ dates.py           # 검색 기간 기본값(어제~오늘)·형식 변환
 ├─ run.py                # 실행 진입점(스위치) → app.main() 을 호출
@@ -198,9 +199,9 @@ GitHub 가 클라우드의 윈도우 컴퓨터를 빌려줘서 거기서 exe 를
    초록색 **Run workflow** 한 번 더 클릭.
 4. 잠깐 뒤 목록에 노란 점(●) → 초록 체크(✓)로 바뀌면 완료다(보통 **3~6분**).
    실행 줄을 클릭해서 들어간다.
-5. 페이지 맨 아래 **Artifacts** 칸에 **TKFDownloader-windows** 가 있다. 클릭하면
-   `TKFDownloader-windows.zip` 이 다운로드된다.
-6. zip 을 풀면 **`TKFDownloader.exe`** 가 들어 있다. 이게 윈도우 사용자에게 줄 파일이다.
+5. 페이지 맨 아래 **Artifacts** 칸에 **TKFDownloader-<브랜치>-<커밋7자리>** 가 있다.
+   클릭하면 zip 이 다운로드된다.
+6. zip 을 풀면 **`TKFDownloader-stage-1a2b3c4.exe`** 같은 파일이 들어 있다. 이게 윈도우 사용자에게 줄 파일이다.
 
 > 💡 빨간 X(실패)가 뜨면, 그 실행을 눌러 빨간색 단계를 펼치면 에러 메시지가 보인다.
 > 보통 `requirements.txt` 나 설정 파일 오타다.
@@ -217,7 +218,7 @@ git push origin v0.1.0
 
 - 빌드가 끝나면 저장소 우측 **Releases** (또는
   `https://github.com/sunshine0550/tkf-shipment-downloader/releases`)에 `v0.1.0` 릴리스가
-  생기고, 그 아래 **Assets** 에 `TKFDownloader.exe` 가 붙어 있다.
+  생기고, 그 아래 **Assets** 에 `TKFDownloader-v1.0.1.exe` 처럼 **태그 이름이 붙은 exe** 가 있다.
 - 다음 버전은 `v0.1.1`, `v0.2.0` 처럼 **올려가며** 태그를 새로 push 하면 된다
   (같은 태그를 두 번 쓰면 안 됨).
 
@@ -298,7 +299,8 @@ pyinstaller --onefile --windowed --name TKFDownloader --collect-all playwright -
 
 6. **접근 제어 원격 의존 (`access.py`)** — `ALLOWLIST_URL` 이 살아있어야 한다. `FAIL_OPEN
    = False` 라서 네트워크로 allowlist 를 못 읽으면 **전부 차단**된다(Gist 삭제/사설망 차단
-   주의). GUI 스레딩과 무관하게, 이 검사는 앱 시작 시 동기로 수행된다.
+   주의). 이때 에러창은 "접근 거부"(명단에 없음)가 아니라 "승인 확인 실패"와 실제 원인
+   (SSL/시간초과/형식 등)을 보여준다. GUI 스레딩과 무관하게, 이 검사는 앱 시작 시 동기로 수행된다.
 
 7. **GUI 스레딩 규칙 (`app.py`)** — 위젯은 **메인 스레드에서만** 만지고, Worker 스레드 →
    GUI 갱신은 반드시 `root.after(...)` 로 넘긴다. 새 기능 추가 시 워커에서 위젯을 직접

@@ -124,7 +124,7 @@ def test_download_row_saves_and_reports(tmp_path, monkeypatch):
     folder, saved, failed = _client().download_row({"DELIVERY_NUM": "SHIP-1"}, str(tmp_path))
 
     assert [p.split("/")[-1] for p in saved] == ["invoice.pdf"]
-    assert (tmp_path / "SHIP-1" / "invoice.pdf").read_bytes() == b"PDFDATA"
+    assert (tmp_path / "SHIP-1" / "pdf" / "invoice.pdf").read_bytes() == b"PDFDATA"
     assert failed == [("Bad", "HTTP 403")]
 
 
@@ -143,3 +143,27 @@ def test_download_row_dedupes_same_basename(tmp_path, monkeypatch):
     _, saved, _ = _client().download_row({"DELIVERY_NUM": "SHIP-2"}, str(tmp_path))
     # 같은 파일명(doc.pdf)이 겹치면 뒤엣것에 _1 을 붙여 구분한다.
     assert sorted(p.split("/")[-1] for p in saved) == ["doc.pdf", "doc_1.pdf"]
+
+
+def test_download_row_sorts_into_extension_folders(tmp_path, monkeypatch):
+    detail = {"listShipmentDocumentUrls": [
+        {"DOCUMENT_URL": "https://x/a.pdf", "DESCRIPTION": "Invoice"},
+        {"DOCUMENT_URL": "https://x/b.JPG", "DESCRIPTION": "Photo"},
+        {"DOCUMENT_URL": "https://x/noext", "DESCRIPTION": "Raw"},
+    ]}
+    routes = {
+        "GetShipmentHistoryInfo": _Resp(json.dumps(detail)),
+        "a.pdf": _Resp(b"P", "application/pdf"),
+        "b.JPG": _Resp(b"J", "image/jpeg"),
+        "noext": _Resp(b"N", "application/octet-stream"),
+    }
+    _patch_urlopen(monkeypatch, routes)
+
+    folder, saved, failed = _client().download_row({"DELIVERY_NUM": "SHIP-3"}, str(tmp_path))
+
+    # 확장자별 하위 폴더(소문자)로 나뉘고, 확장자가 없으면 etc 로 간다.
+    assert folder == str(tmp_path / "SHIP-3")
+    assert (tmp_path / "SHIP-3" / "pdf" / "a.pdf").read_bytes() == b"P"
+    assert (tmp_path / "SHIP-3" / "jpg" / "b.JPG").read_bytes() == b"J"
+    assert (tmp_path / "SHIP-3" / "etc" / "noext").read_bytes() == b"N"
+    assert failed == []
